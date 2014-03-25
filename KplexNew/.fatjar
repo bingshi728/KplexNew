@@ -1,0 +1,14 @@
+#Fat Jar Configuration File
+#Fri Aug 31 20:52:21 CST 2012
+onejar.license.required=true
+manifest.classpath=
+manifest.removesigners=true
+onejar.checkbox=false
+jarname=KplexNew.jar
+manifest.mergeall=true
+manifest.mainclass=kplexnew.countK_Plex
+manifest.file=<createnew>
+jarname.isextern=false
+onejar.expand=
+excludes=
+includes=
