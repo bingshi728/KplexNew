@@ -4,6 +4,7 @@ package kplexnew;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -595,9 +596,12 @@ static int dupnum = 0;
 		k_plex = 2;
 		readInOneLeapData(args[0]);
 		BufferedReader reader = new BufferedReader(new FileReader(args[1]));
-		Compare(args[1]);
+		//Compare(args[1]);
 		//Compare(args[2]);
-		//test(args[1],args[2]);
+//		test(args[1],args[2]);
+//		test(args[2],args[1]);
+		print("serialold",args[2]);
+		print("serialnew",args[1]);
 	}
 	public static void Compare(String str1) throws NumberFormatException, IOException {
 		
@@ -657,6 +661,26 @@ static int dupnum = 0;
 				return false;
 		}
 		return true;
+	}
+	private static void print(String file,String inputfile){
+		FileWriter fw;
+		try {
+			fw = new FileWriter(file);
+			ReadFile fi = new ReadFile();
+			fi.readFileByLines(inputfile);
+			Map<Integer, List<String>> k2c = fi.resultfile;
+			for(List<String> li:k2c.values()){
+				Collections.sort(li);
+				for(String ss:li)
+						fw.write(ss+"\n");
+			}
+			fw.flush();
+			fw.close();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
 	}
 	public static void test(String file1, String file2) {
 		ReadFile fi = new ReadFile();

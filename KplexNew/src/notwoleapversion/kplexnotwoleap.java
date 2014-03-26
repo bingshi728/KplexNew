@@ -32,25 +32,7 @@ public class kplexnotwoleap {
 	public static HashSet<Integer> nodeSet = new HashSet<Integer>(1000);
 	// 子状态集和结果集
 	public static Stack<SubGraph> stack = new Stack<SubGraph>();
-	public static ArrayList<Integer> result = new ArrayList<Integer>(30);
-	// loadbalance时候分散成多少份
-	public static int totalPart = 36;// 分散成为多少部分
-	// pick为不进行loadbalance的节点集，split为需要loadbalance的节点集
-	public static ArrayList<Integer> pick = new ArrayList<Integer>();
-	//
-	// public static HashMap<Integer,Integer> res = new
-	// HashMap<Integer,Integer>();
-	// public static ArrayList<Pair> candidate = new ArrayList<Pair>();
-	// public static HashMap<Integer,Integer> not = new
-	// HashMap<Integer,Integer>();
-
-	// public static int number = 0;
-	public static int levelNumber = 0;
-	public static int levelExtream = 10;
-	//public static HashSet<Integer> hs = new HashSet<Integer>();
-	/**
-	 * 缓存一个点的第二跳数据,仅仅是第二跳的不算第一跳数据
-	 */
+	
 	public static HashMap<Integer, HashSet<Integer>> cacheTwoleap = new HashMap<Integer, HashSet<Integer>>();
 	public static PrintStream ps = null;
 
@@ -70,35 +52,41 @@ public class kplexnotwoleap {
 		}
 	}
 
+	private static SubGraph initSize1SubGraph(Integer current){
+		ArrayList<Pair> tmpres = new ArrayList<Pair>();
+		Pair curre = new Pair(current,0);
+		tmpres.add(curre);
+		
+		HashMap<Integer,Pair> tmpcand = new HashMap<Integer,Pair>();
+		HashMap<Integer,Pair> tmpnot = new  HashMap<Integer,Pair>();
+		//生成size-1的子图
+		getCandidate2(tmpcand,tmpnot,curre);
+		SubGraph initsub = new SubGraph();
+		initsub.setCandidate(tmpcand);
+		initsub.setNot(tmpnot);
+		initsub.setResult(tmpres);
+		return initsub;
+	}
 	public static void computeOneleapData(String file) throws IOException, CloneNotSupportedException {
 		readInOneLeapData(file);
 		long t1 = System.currentTimeMillis();
 		// 排序后，每个reduce只处理对应节点
 		for (Integer current : nodeSet) {
-//			if(current==528){
+//			if(current==660){
 			if (current % reduceNumber == 0) {
 //			if (true) {
 				stack.clear();
 				// 构造起始状态，获得备选节点列表和度数列表
 				// 此时res为T(+),candidate+res为Tx,candidate为T(-)
-				ArrayList<Pair> tmpres = new ArrayList<Pair>();
-				Pair curre = new Pair(current,0);
-				tmpres.add(curre);
 				
-				HashMap<Integer,Pair> tmpcand = new HashMap<Integer,Pair>();
-				HashMap<Integer,Pair> tmpnot = new  HashMap<Integer,Pair>();
-				getCandidate2(tmpcand,tmpnot,curre);
-				SubGraph initsub = new SubGraph();
-				initsub.setCandidate(tmpcand);
-				initsub.setNot(tmpnot);
-				initsub.setResult(tmpres);
-				stack.add(initsub);
+				stack.add(initSize1SubGraph(current));
 				// "备选集"的概念和kplexold不同，此处备选集包含“两跳”节点，是待分解的原始图
 				// 若“原始图”大小>=有意义的kplex大小时才进行计算
 				// 若只计算某个节点最大的k-plex时，需再加判断条件
 				while (!stack.isEmpty()) {
 					SubGraph top = stack.pop();
 					ArrayList<Pair> res = top.getResult();
+					
 					HashMap<Integer,Pair> candidate = top.getCandidate();
 					HashMap<Integer,Pair> not = top.getNot();
 					//这里保证了candidate中的所有点都满足条件2:在临界点邻接表内
@@ -126,12 +114,14 @@ public class kplexnotwoleap {
 							}
 							break;
 						}
+						//判断not集中是否有点与res和candidate中的点都相邻,以提前剪枝
 						if (duplicate(not, res.size(), candidate.size())) {
 							dupnum++;
 							break;
 						}
 						if (judgeKplex2(res, candidate))// 是kplex
 						{
+							//判断not集中是否有点可以和res+candidate构成kplex
 							if(duplicate(not,res,candidate))
 								break;
 							// 是clique输出
@@ -221,26 +211,23 @@ public class kplexnotwoleap {
 						it.remove();
 				}
 				for (Pair n : not.values()) {
-					if (n.cdeg + n.rdeg < size)
+					if (n.cdeg + n.rdeg <= size)
 						continue;
 					return true;
 				}
 			} else {
-				Iterator<Integer> it = intersection.iterator();
-				while (it.hasNext()) {
-					if (!not.containsKey(it.next()))
-						it.remove();
-				}
-				for (Integer i : intersection) {
+				for (Integer i:intersection) {
 					Pair p = not.get(i);
-					if (p.cdeg + p.rdeg < size)
-						continue;
-					return true;
+					if(p!=null){
+						if (p.cdeg + p.rdeg <= size)
+							continue;
+						return true;
+					}
 				}
 			}
 		} else {
 			for (Pair n : not.values()) {
-				if (n.cdeg + n.rdeg < size)
+				if (n.cdeg + n.rdeg <= size)
 					continue;
 				return true;
 			}
@@ -444,11 +431,9 @@ public class kplexnotwoleap {
 			IOException {
 		ps=new PrintStream(new File(args[1]));
 		System.setOut(ps);
-		levelExtream = 50;
 		reduceNumber = 132;
 		quasiCliqueSize = 5;
 		k_plex = 2;
-		totalPart = 32;
 	}
 
 static	int hit = 0;
@@ -540,8 +525,9 @@ static	int hit = 0;
 		int size = res.size();
 		if(size<=k_plex)
 			return;
+		size -= k_plex;
 		for (Pair p:res) {
-			if (size-p.rdeg == k_plex)
+			if (p.rdeg == size)
 				critSet.add(p.point);
 		}
 	}
@@ -621,11 +607,12 @@ static	int hit = 0;
 	private static void updateRdeg(HashMap<Integer, Pair> can,
 			HashSet<Integer> adj, int ressize) {
 		Iterator<Entry<Integer, Pair>> it = can.entrySet().iterator();
+		int mindeg = ressize-k_plex+1;
 		while (it.hasNext()) {
 			Pair p = it.next().getValue();
 			if (adj.contains(p.point))
 				p.rdeg++;
-			else if (ressize - p.rdeg >= k_plex) {
+			else if (p.rdeg < mindeg) {
 				it.remove();
 			}
 		}
