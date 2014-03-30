@@ -596,12 +596,12 @@ static int dupnum = 0;
 		k_plex = 2;
 		readInOneLeapData(args[0]);
 		BufferedReader reader = new BufferedReader(new FileReader(args[1]));
-		//Compare(args[1]);
-		//Compare(args[2]);
+		Compare(args[1]);
+		Compare(args[2]);
 //		test(args[1],args[2]);
 //		test(args[2],args[1]);
-		print("serialold",args[2]);
-		print("serialnew",args[1]);
+//		print("serialold",args[2]);
+//		print("serialnew",args[1]);
 	}
 	public static void Compare(String str1) throws NumberFormatException, IOException {
 		

@@ -31,6 +31,7 @@ public class kplexnotwoleap {
 	public static HashSet<Integer> nodeSet = new HashSet<Integer>(1000);
 	// 子状态集和结果集
 	public static Stack<SubGraph> stack = new Stack<SubGraph>();
+	
 
 	public static PrintStream ps = null;
 
@@ -60,23 +61,30 @@ public class kplexnotwoleap {
 		HashMap<Integer, Pair> tmpnot = new HashMap<Integer, Pair>();
 		// 生成size-1的子图
 		getCandidate2(tmpcand, tmpnot, curre);
+		if(tmpcand.size()+1<quasiCliqueSize)
+			return null;
 		SubGraph initsub = new SubGraph();
 		initsub.setCandidate(tmpcand);
 		initsub.setNot(tmpnot);
 		initsub.setResult(tmpres);
 		return initsub;
 	}
-
+static int treesize = 0;
+static int purningsize = 0;
 	public static void computeOneleapData(String file) throws IOException,
 			CloneNotSupportedException {
 		readInOneLeapData(file);
 		long t1 = System.currentTimeMillis();
 		// 排序后，每个reduce只处理对应节点
 		for (Integer current : nodeSet) {
-			// if(current==660){
+//			 if(current==19){
 			if (current % reduceNumber == 0) {
-				// if (true) {
-				stack.add(initSize1SubGraph(current));
+//			if (true) {
+				SubGraph init = initSize1SubGraph(current);
+				if(init == null)
+					continue;
+				stack.add(init);
+				treesize++;
 				// "备选集"的概念和kplexold不同，此处备选集包含“两跳”节点，是待分解的原始图
 				while (!stack.isEmpty()) {
 					SubGraph top = stack.pop();
@@ -112,6 +120,7 @@ public class kplexnotwoleap {
 						// 判断not集中是否有点与res和candidate中的点都相邻,以提前剪枝
 						if (duplicate(not, res.size(), candidate.size())) {
 							dupnum++;
+							purningsize++;
 							break;
 						}
 						if (judgeKplex2(res, candidate))// 是kplex
@@ -125,6 +134,7 @@ public class kplexnotwoleap {
 							System.out.println(r.toString().substring(1,
 									r.length() - 1)
 									+ ", " + c.substring(1, c.length() - 1));
+							cliquenum++;
 							break;
 						} else {
 							// 找到度数最小的点
@@ -172,6 +182,7 @@ public class kplexnotwoleap {
 								sA.setResult(resA);
 								sA.setNot(notA);
 								stack.add(sA);
+								treesize++;
 							}
 
 							not.put(yint, y);
@@ -181,7 +192,8 @@ public class kplexnotwoleap {
 			}
 		}
 		long t2 = System.currentTimeMillis();
-		System.out.println("========" + (t2 - t1) / 1000);
+		System.out.println("kplex num="+cliquenum+"========" + (t2 - t1) / 1000+" s, treesize="+treesize+
+				"/purningsize:"+purningsize);
 	}
 
 	private static boolean duplicate(HashMap<Integer, Pair> not,
@@ -453,11 +465,13 @@ public class kplexnotwoleap {
 		current.cdeg = curdeg;
 		HashSet<Integer> twoadj;
 
+		HashSet<Integer>tmpadj;
 		// 缓存未命中
 		twoadj = new HashSet<Integer>();
 		for (Integer i : oneadj) {// 一跳集
-			twoadj.addAll(oneLeap.get(i));// 生成二跳集
-			tmpdeg = oneLeap.get(i).size();
+			tmpadj = oneLeap.get(i);
+			twoadj.addAll(tmpadj);// 生成二跳集
+			tmpdeg = tmpadj.size();
 			if (tmpdeg > curdeg) {
 				not.put(i, new Pair(i, 1));
 			} else if (tmpdeg < curdeg) {
@@ -485,19 +499,8 @@ public class kplexnotwoleap {
 				} else
 					// if (i < current) {//上面保证了二跳集中不会有current
 					not.put(i, new Pair(i, 0));
-				// }// 相等的话即current本身,不需要加入任何集合,不处理
 			}
 		}
-		// 加入到缓存
-		// cacheTwoleap.put(current.point, twoadj);
-		// 过滤缓存,,防止两跳缓存过大
-		// Iterator<Map.Entry<Integer, HashSet<Integer>
-		// >>en=cacheTwoleap.entrySet().iterator();
-		// while(en.hasNext()){
-		// if(!hs.contains(en.next().getKey())){
-		// en.remove();
-		// }
-		// }
 	}
 
 	/**
