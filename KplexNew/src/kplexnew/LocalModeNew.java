@@ -17,7 +17,6 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Partitioner;
 
 import search.sGraph;
-import search.searchOneLeap.MyComparator;
 
 public class LocalModeNew {
 	//reduce数目

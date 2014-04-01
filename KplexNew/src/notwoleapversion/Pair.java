@@ -57,9 +57,15 @@ public class Pair implements Comparable<Pair>, Cloneable{
 	 * @see java.lang.Object#clone()
 	 */
 	@Override
-	public Pair clone() throws CloneNotSupportedException {
-		Pair re = (Pair)super.clone();
-		re.node = null;
+	public Pair clone(){
+		Pair re = null;
+		try {
+			re = (Pair)super.clone();
+			re.node = null;
+		} catch (CloneNotSupportedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return re;
 	}
 	
