@@ -27,5 +27,6 @@
 	<classpathentry kind="lib" path="/home/youli/workspace/lib/hadoop-hdfs-0.21.0.jar"/>
 	<classpathentry kind="lib" path="/home/youli/workspace/lib/hadoop-mapred-0.21.0.jar"/>
 	<classpathentry kind="lib" path="/home/youli/workspace/lib/hadoop-thriftfs-1.0.3.jar"/>
+	<classpathentry kind="lib" path="lib/ganymed-ssh2-build210.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

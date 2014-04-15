@@ -16,6 +16,7 @@ import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.Map.Entry;
 
+import main.RunOver;
 import notwoleapversion.DegList;
 import notwoleapversion.Node;
 import notwoleapversion.Pair;
@@ -23,6 +24,7 @@ import notwoleapversion.SubGraph;
 
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -31,7 +33,7 @@ import org.apache.hadoop.mapreduce.Reducer.Context;
 
 
 public class loadBalanceStep {
-	static String rootdir = "/home/dic/QuasicClique/";
+	static String rootdir = "/home/"+RunOver.usr+"/QuasicClique/";
 	// reduce数目
 	static int reduceNumber = 36;
 	// 有意义的k-plex大小
@@ -135,7 +137,7 @@ public class loadBalanceStep {
 				Context context) throws IOException, InterruptedException {
 			reduceid = key.get();
 			if(writer==null){
-				writer = new FileWriter(rootdir+"outresult/"+reduceid);
+				writer = new FileWriter(RunOver.spillPath+reduceid);
 			}
 			for(Text t:values){
 				String sStr = t.toString();
@@ -145,7 +147,7 @@ public class loadBalanceStep {
 					stack.add(subGraph);
 					treesize++;
 					while(time<T&&!stack.isEmpty()){
-						time+=computeOneSubGraph(stack.pop(),true);
+						time+=computeOneSubGraph(stack.pop(),true,context);
 					}
 				}else{
 					writer.write(sStr);
@@ -157,20 +159,20 @@ public class loadBalanceStep {
 		protected void cleanup(Context context) throws IOException,
 				InterruptedException {
 			writer.close();
-			File prevfile = new File(rootdir+"outresult/"+reduceid);
+			File prevfile = new File(RunOver.spillPath+reduceid);
 			if(prevfile.exists()&&prevfile.length()>0){
 				if(time<T){
-					File curFile = new File(rootdir+"outresult/"+reduceid+"#");
-					BufferedReader reader = new BufferedReader(new FileReader(curFile));
+					File curFile = new File(RunOver.spillPath+reduceid+"#");
+					BufferedReader reader = new BufferedReader(new FileReader(prevfile));
 					FileWriter newWriter = new FileWriter(curFile);
 					String line = "";
 					stack.clear();
 					while(time<T&&(line=reader.readLine())!=null){
 						SubGraph graph = new SubGraph();
-						graph.readInString(line.substring(line.indexOf("#")+1, line.length()));
+						graph.readInString(line.substring(line.indexOf("%")+1, line.length()));
 						stack.add(graph);
 						while(!stack.isEmpty() && time<T){
-							time += computeOneSubGraph(stack.pop(),false);
+							time += computeOneSubGraph(stack.pop(),false,context);
 							if(time>=T)
 								break;
 						}
@@ -185,6 +187,8 @@ public class loadBalanceStep {
 					if(curFile.exists()&& curFile.length()==0){
 						curFile.delete();
 					}
+					reader.close();
+					prevfile.delete();
 				}
 			}else if(prevfile.exists()){
 				prevfile.delete();
@@ -194,9 +198,10 @@ public class loadBalanceStep {
 			super.cleanup(context);
 		}
 		
-		private long computeOneSubGraph(SubGraph top, boolean spillBig) throws IOException {
+		private long computeOneSubGraph(SubGraph top, boolean spillBig, org.apache.hadoop.mapreduce.Reducer.Context context) throws IOException, InterruptedException {
 			long t1 = System.currentTimeMillis();
 			ArrayList<Pair> res = top.getResult();
+			ArrayList<Pair> prunablenot = new ArrayList<Pair>();
 			HashMap<Integer, Pair> candidate = top.getCandidate();
 			HashMap<Integer, Pair> not = top.getNot();
 			// 这里保证了candidate中的所有点都满足条件2:在临界点邻接表内
@@ -211,13 +216,15 @@ public class loadBalanceStep {
 			updateDeg(deglist, candidate);
 			// 计算res和not的cdeg
 			computeDeg(res, candidate);// 这里只是为了一致,size-1图的res的cdeg是已经有了的
-			computeDeg(not, candidate);
+			computeDeg(prunablenot,not, candidate,res.size());
 			while (res.size() + candidate.size() >= quasiCliqueSize) {
 				if (candidate.isEmpty()) {
 					if (not.isEmpty()) {
-//						String r = res.toString();
-//						System.out.println(r.substring(1,
-//								r.length() - 1));
+						if(RunOver.spillRes){
+							String r = res.toString();
+							context.write(new Text(r.substring(1,
+									r.length() - 1)), NullWritable.get());
+						}
 						cliquenum++;
 					} else {
 						dupnum++;
@@ -225,7 +232,7 @@ public class loadBalanceStep {
 					break;
 				}
 				// 判断not集中是否有点与res和candidate中的点都相邻,以提前剪枝
-				if (duplicate(not, res.size(), candidate.size())) {
+				if (duplicate(prunablenot, candidate.size())) {
 					dupnum++;
 					purningsize++;
 					break;
@@ -236,11 +243,16 @@ public class loadBalanceStep {
 					if (duplicate(not, res, candidate))
 						break;
 					// 是clique输出
-//					String r = res.toString();
-//					String c = candidate.keySet().toString();
-//					System.out.println(r.toString().substring(1,
-//							r.length() - 1)
-//							+ ", " + c.substring(1, c.length() - 1));
+					if (RunOver.spillRes) {
+						String r = res.toString();
+						String c = candidate.keySet().toString();
+						context.write(
+								new Text(r.toString().substring(1,
+										r.length() - 1)
+										+ ", " + c.substring(1, c.length() - 1)),
+								NullWritable.get());
+					}
+
 					cliquenum++;
 					break;
 				} else {
@@ -295,6 +307,8 @@ public class loadBalanceStep {
 						treesize++;
 					}
 					not.put(yint, y);
+					if(y.rdeg==res.size())
+						prunablenot.add(y);
 				}
 			}
 			long t2 = System.currentTimeMillis();
@@ -469,8 +483,8 @@ public class loadBalanceStep {
 			}
 		}
 
-		private static void computeDeg(Map<Integer, Pair> res,
-				HashMap<Integer, Pair> candidate) {
+		private static void computeDeg(ArrayList<Pair>prunablenot,Map<Integer, Pair> res,
+				HashMap<Integer, Pair> candidate,int ressize) {
 			int num;
 			for (Entry<Integer, Pair> p : res.entrySet()) {
 				num = 0;
@@ -486,6 +500,8 @@ public class loadBalanceStep {
 							num++;
 					}
 				}
+				if(p.getValue().rdeg==ressize)
+					prunablenot.add(p.getValue());
 				p.getValue().cdeg = num;
 			}
 		}
@@ -550,12 +566,11 @@ public class loadBalanceStep {
 			deglist.makeList(nodes);
 		}
 
-		private static boolean duplicate(HashMap<Integer, Pair> not, int rsize,
+		private static boolean duplicate(ArrayList<Pair> not,
 				int csize) {
-			for (Pair p : not.values()) {
-				if (p.rdeg == rsize && p.cdeg == csize)
+			for(Pair p:not)
+				if(p.cdeg==csize)
 					return true;
-			}
 			return false;
 		}
 
