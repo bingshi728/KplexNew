@@ -101,17 +101,15 @@ public class loadBalanceStep {
 			FileReader fr3 = new FileReader(new File(rootdir+"kplexnew_PARAMETER.txt"));
 			BufferedReader bfr3 = new BufferedReader(fr3);
 			// 提取出所有的参数
-			String record3 = "";
-			//split.clear();
-			while ((record3 = bfr3.readLine()) != null) {
-				String[] adjInfos = record3.split(" ");
-				graphFile = adjInfos[0];
-				reduceNumber = Integer.valueOf(adjInfos[1]);
-				quasiCliqueSize = Integer.valueOf(adjInfos[2]);				
-				k_plex = Integer.valueOf(adjInfos[3]);
-				T = Integer.valueOf(adjInfos[4])*1000L;
-				N = Integer.valueOf(adjInfos[5]);
-			}
+			String record3 = bfr3.readLine();
+			String[] adjInfos = record3.split(" ");
+			reduceNumber = Integer.valueOf(adjInfos[0]);
+			quasiCliqueSize = Integer.valueOf(adjInfos[1]);
+			k_plex = Integer.valueOf(adjInfos[2]);
+			T = Integer.valueOf(adjInfos[3]) * 1000L;
+			N = Integer.valueOf(adjInfos[4]);
+
+			graphFile = bfr3.readLine();
 			bfr3.close();
 			count = new Random().nextInt(reduceNumber);
 			readInOneLeapData(graphFile);
@@ -169,6 +167,7 @@ public class loadBalanceStep {
 					File curFile = new File(RunOver.spillPath+reduceid+"#");
 					BufferedReader reader = new BufferedReader(new FileReader(prevfile));
 					FileWriter newWriter = new FileWriter(curFile);
+					writer = newWriter;
 					String line = "";
 					stack.clear();
 					while(time<T&&(line=reader.readLine())!=null){
@@ -204,6 +203,7 @@ public class loadBalanceStep {
 		
 		private long computeOneSubGraph(SubGraph top, boolean spillBig, org.apache.hadoop.mapreduce.Reducer.Context context) throws IOException, InterruptedException {
 			long t1 = System.currentTimeMillis();
+			long tmp = t1;
 			ArrayList<Pair> res = top.getResult();
 			ArrayList<Pair> prunablenot = new ArrayList<Pair>();
 			HashMap<Integer, Pair> candidate = top.getCandidate();
@@ -313,6 +313,12 @@ public class loadBalanceStep {
 					not.put(yint, y);
 					if(y.rdeg==res.size())
 						prunablenot.add(y);
+				}
+				tmp = System.currentTimeMillis();
+				
+				if(tmp-t1+time>T && candidate.size()>N){
+					spillToDisk(writer,top);
+					break;
 				}
 			}
 			long t2 = System.currentTimeMillis();
