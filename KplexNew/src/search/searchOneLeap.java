@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Stack;
@@ -43,9 +44,9 @@ public class searchOneLeap {
 	public static int kPlexSize = 0;
 	// 将“一跳”信息读入内存，存在HashMap中
 	public static HashMap<Integer, HashSet<Integer>> oneLeap = new HashMap<Integer, HashSet<Integer>>(
-			7000);
+			);
 	// 数据集中的节点集合
-	public static HashSet<Integer> nodeSet = new HashSet<Integer>(1000);
+	public static HashSet<Integer> nodeSet = new HashSet<Integer>();
 	// 子状态集和结果集
 	public static Stack<SubGraph> stack = new Stack<SubGraph>();
 	public static HashSet<Integer> pick = new HashSet<Integer>();
@@ -64,13 +65,13 @@ public class searchOneLeap {
 			
 			bfr3.close();
 		}
-
+		Text empty = new Text();
 		@Override
 		// 若第一跳相同，则是聚起来的
 		protected void map(LongWritable key, Text value, Context context)
 				throws IOException, InterruptedException {
 			for (int i = 0; i < reduceNumber; i++) {
-				context.write(new IntWritable(i), value);
+				context.write(new IntWritable(i), empty);
 			}
 		}
 	}
@@ -101,7 +102,7 @@ public class searchOneLeap {
 			pick.clear();
 			while ((record = bfr.readLine()) != null) {
 				String[] adjInfos = record.split(" ");
-				for (int i = 1; i < adjInfos.length; i++)
+				for (int i = 0; i < adjInfos.length; i++)
 					pick.add(Integer.valueOf(adjInfos[i]));
 			}
 			bfr.close();
@@ -120,6 +121,8 @@ public class searchOneLeap {
 			graphFile = bfr3.readLine();
 			bfr3.close();
 			count = new Random().nextInt(reduceNumber);
+			readInOneLeapData(graphFile);
+			System.out.println("end of setup");
 		}
 		private static SubGraph initSize1SubGraph(Integer current) {
 			ArrayList<Pair> tmpres = new ArrayList<Pair>();
@@ -573,35 +576,57 @@ public class searchOneLeap {
 		static int treesize = 0;
 		static int purningsize = 0;
 		static long time = 0;
+		public static void readInOneLeapData(String file) throws IOException {
+			long t1 = System.currentTimeMillis();
+			BufferedReader reader = new BufferedReader(new FileReader(file));
+			String line;
+			StringTokenizer stk;
+			while ((line = reader.readLine()) != null) {
+				stk = new StringTokenizer(line);
+				int k = Integer.parseInt(stk.nextToken());
+				HashSet<Integer> adj = new HashSet<Integer>();
+				nodeSet.add(k);
+				while (stk.hasMoreTokens()) {
+					adj.add(Integer.parseInt(stk.nextToken()));
+				}
+				oneLeap.put(k, adj);
+			}
+			reader.close();
+			long t2 = System.currentTimeMillis();
+			System.out.println("read edgetime "+(t2-t1));
+		}
 		@Override
 		protected void reduce(IntWritable key, Iterable<Text> values,
 				Context context) throws IOException, InterruptedException {
-			nodeSet.clear();
 			//reduce的编号，方便将所有节点分散到各个reduce进行计算
 			int part = key.get();
 			if(writer==null){
 				writer = new FileWriter(RunOver.spillPath+part);
 				reduceid = part;
+				System.out.println(reduceid);
 			}
+			System.out.println("start of reduce");
+//			StringTokenizer stk;
 			for (Text t : values)// 获得一跳信息
 			{
-				String val = t.toString();
-				String[] oneleap = val.split(" ");
-				int node = Integer.valueOf(oneleap[0]);
-				nodeSet.add(node);
-				HashSet<Integer> adj = new HashSet<Integer>(80);
-				for (int i = 1; i < oneleap.length; i++) {
-					adj.add(Integer.valueOf(oneleap[i]));
-				}
-				oneLeap.put(node, adj);
+//				String val = t.toString();
+//				stk = new StringTokenizer(val);
+//				int k = Integer.parseInt(stk.nextToken());
+//				HashSet<Integer> adj = new HashSet<Integer>();
+//				nodeSet.add(k);
+//				while (stk.hasMoreTokens()) {
+//					adj.add(Integer.parseInt(stk.nextToken()));
+//				}
+//				oneLeap.put(k, adj);
 			}
-
+			
+			System.out.println("in reduce nodeset size"+nodeSet.size()+"pick size"+pick.size());
 			// 排序后，每个reduce只处理对应节点
 			for (Integer current : nodeSet) {
 //				 if(current==19){
 				if (current % reduceNumber == reduceid) {
-					if (true) {
-//					if(pick.contains(current)){
+//					if (true) {
+					if(pick.contains(current)){
 						SubGraph init = initSize1SubGraph(current);
 						if(init == null)
 							continue;
@@ -617,6 +642,7 @@ public class searchOneLeap {
 								spillToDisk(writer,stack.pop());
 							}
 						}else{
+							System.out.println("in reduce time out");
 							spillToDisk(writer,init);
 						}
 					}
@@ -635,6 +661,7 @@ public class searchOneLeap {
 			if(writer!=null)
 				writer.close();
 			File prevfile = new File(RunOver.spillPath+reduceid);
+			System.out.println("in clean up");
 			if(prevfile.exists()&&prevfile.length()>0){
 				if(time<T){
 					File curFile = new File(RunOver.spillPath+reduceid+"#");
@@ -649,8 +676,6 @@ public class searchOneLeap {
 						stack.add(graph);
 						while(!stack.isEmpty() && time<T){
 							time += computeOneSubGraph(stack.pop(),false,context);
-							if(time>=T)
-								break;
 						}
 					}
 					while(!stack.isEmpty()){
@@ -786,7 +811,8 @@ public class searchOneLeap {
 				}
 				tmp = System.currentTimeMillis();
 				
-				if(tmp-t1+time>T && candidate.size()>N){
+				if(tmp-t1+time>=T && candidate.size()>N){
+					System.out.println("time is out spill rest in to disk");
 					spillToDisk(writer,top);
 					break;
 				}

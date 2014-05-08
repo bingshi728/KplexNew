@@ -115,6 +115,7 @@ public class loadBalanceStep {
 			readInOneLeapData(graphFile);
 		}
 		public static void readInOneLeapData(String file) throws IOException {
+			long t1 = System.currentTimeMillis();
 			BufferedReader reader = new BufferedReader(new FileReader(file));
 			String line;
 			StringTokenizer stk;
@@ -129,6 +130,8 @@ public class loadBalanceStep {
 				oneLeap.put(k, adj);
 			}
 			reader.close();
+			long t2 = System.currentTimeMillis();
+			System.out.println("read edgetime "+(t2-t1));
 		}
 		@Override
 		protected void reduce(IntWritable key, Iterable<Text> values,
@@ -151,7 +154,7 @@ public class loadBalanceStep {
 						spillToDisk(writer,stack.pop());
 					}
 				}else{
-					writer.write(sStr);
+					writer.write(((count++)%reduceNumber)+" 0%"+sStr);
 					writer.write("\n");
 				}
 			}
@@ -176,8 +179,6 @@ public class loadBalanceStep {
 						stack.add(graph);
 						while(!stack.isEmpty() && time<T){
 							time += computeOneSubGraph(stack.pop(),false,context);
-							if(time>=T)
-								break;
 						}
 					}
 					while(!stack.isEmpty()){
